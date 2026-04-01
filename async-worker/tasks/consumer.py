@@ -1,13 +1,12 @@
-﻿import pika
+import pika
 import json
 import requests
 
 RABBIT_HOST = 'localhost'
 QUEUE = 'alerts'
-AUTH_API_URL = 'http://localhost:8001/api/alertes/'
+AUTH_API_URL = 'http://localhost:8002/api/alertes/'
 
-# ضع التوكن الخاص بك هنا (الذي حصلت عليه سابقاً)
-TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc0OTkyMTgzLCJpYXQiOjE3NzQ5OTE4ODMsImp0aSI6ImNjNWY0N2ViOTIxYzRlZjhhM2FjZDY0NDRhZWQxZjEzIiwidXNlcl9pZCI6IjEifQ.CaCS419_5W64C3bD6IWkQBGVxHa8e7r5Sg8GLrAx0IQ'
+TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc1MTMxNjA1LCJpYXQiOjE3NzUwNDUyMDUsImp0aSI6IjRiYmE2NmU2ZGFjZDQyMzJhNzk3OGQ0YzJhMGRiMjBmIiwidXNlcl9pZCI6IjMifQ.RPV50oAHNcsyH81giO975n2eKyDNLkK0jZiEZGKTtfw'
 
 def callback(ch, method, properties, body):
     data = json.loads(body)

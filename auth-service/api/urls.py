@@ -8,6 +8,8 @@ router.register(r'alertes', views.AlerteViewSet)
 
 urlpatterns = [
     path('health', views.health),
-    path('register', views.register),
-    path('', include(router.urls)),
+    path('login', views.login_email),                      
+    path('register', views.register_fullname),             
+    path('password-reset', views.password_reset_request),  
+    path('', include(router.urls)),                        
 ]

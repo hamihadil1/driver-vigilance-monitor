@@ -1,0 +1,78 @@
+services:
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8002:8002"
+    networks:
+      - mynet
+    volumes:
+      - ./auth_service/data:/app/data
+    environment:
+      - SQLITE_PATH=/app/data/db.sqlite3
+
+  dl-api:
+    build: ./dl-api
+    ports:
+      - "8000:8000"
+    networks:
+      - mynet
+    volumes:
+      - ./dl-api:/app
+    depends_on:
+      - auth-service
+
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8001:8001"
+    networks:
+      - mynet
+
+  async-worker:
+    build: ./async-worker
+    ports:
+      - "8003:8003"
+    networks:
+      - mynet
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - mynet
+
+  consul:
+    image: consul:1.15
+    ports:
+      - "8500:8500"
+    networks:
+      - mynet
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - mynet
+    depends_on:
+      - auth-service
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    networks:
+      - mynet
+    depends_on:
+      - api-gateway
+
+volumes:
+  auth_data:
+
+networks:
+  mynet:
+    driver: bridge

@@ -3,40 +3,6 @@ import { useNavigate } from "react-router-dom";
 import "./Dashboard.css";
 import api from "../services/api"; 
 
-// Sample registered drivers data
-// const REGISTERED_DRIVERS = [
-//   { id: "DRV-2041", name: "Michael Chen", email: "michael.chen@example.com", phone: "+1 555 024 1000", status: "active", joinDate: "Jan 2025", route: "Highway 101 N" },
-//   { id: "DRV-2038", name: "Sarah Johnson", email: "sarah.j@example.com", phone: "+1 555 024 1001", status: "active", joinDate: "Feb 2025", route: "Downtown Loop" },
-//   { id: "DRV-2045", name: "David Martinez", email: "david.m@example.com", phone: "+1 555 024 1002", status: "inactive", joinDate: "Jan 2025", route: "Airport Express" },
-//   { id: "DRV-2033", name: "Emma Wilson", email: "emma.w@example.com", phone: "+1 555 024 1003", status: "active", joinDate: "Mar 2025", route: "Route 66 W" },
-//   { id: "DRV-2051", name: "James Park", email: "james.p@example.com", phone: "+1 555 024 1004", status: "active", joinDate: "Dec 2024", route: "Bay Bridge Rd" },
-//   { id: "DRV-2029", name: "Robert Taylor", email: "robert.t@example.com", phone: "+1 555 024 1005", status: "active", joinDate: "Nov 2024", route: "Coastal Hwy" },
-//   { id: "DRV-2060", name: "Lisa Anderson", email: "lisa.a@example.com", phone: "+1 555 024 1006", status: "active", joinDate: "Feb 2025", route: "Mountain View Rd" },
-//   { id: "DRV-2072", name: "Thomas Wright", email: "thomas.w@example.com", phone: "+1 555 024 1007", status: "inactive", joinDate: "Mar 2025", route: "Industrial Blvd" },
-// ];
-
-// Mock info for *status* and *route*
-const generateMockDrivers = (driversFromBackend) => {
-  const routes = [
-    "Highway 101 - Northbound",
-    "Downtown Express Route",
-    "Coastal Highway",
-    "Mountain Pass Route",
-    "Industrial District Loop",
-    "Airport Connector",
-    "Suburban Transit Line",
-    "Port Authority Route"
-  ];
-  
-  const statuses = ["active", "inactive"];
-  
-  return driversFromBackend.map(driver => ({
-    ...driver,
-    status: statuses[Math.floor(Math.random() * statuses.length)],
-    route: routes[Math.floor(Math.random() * routes.length)]
-  }));
-};
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const [activePage, setActivePage] = useState("dashboard");
@@ -45,49 +11,40 @@ export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [alerts, setAlerts] = useState([]);
   const [callingDriver, setCallingDriver] = useState(null);
-
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Check authentication and role
-useEffect(() => {
-  const token = localStorage.getItem("token");
-  const userRole = localStorage.getItem("userRole");
-  if (!token) {
-    navigate("/login");
-    return;
-  }
-  if (userRole !== "admin") {
-    // If not admin, redirect to driver dashboard
-    navigate("/driver-dashboard");
-    return;
-  }
-}, [navigate]);
+  // التحقق من المصادقة
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const userRole = localStorage.getItem("userRole");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+    if (userRole !== "admin") {
+      navigate("/driver-dashboard");
+      return;
+    }
+  }, [navigate]);
 
-
-  // Fetch drivers from *backend* API
-  // useEffect(() => {
-  //   const fetchDrivers = async () => {
-  //     try {
-  //       const data = await api.getDrivers();
-  //       setDrivers(data);
-  //       setLoading(false);
-  //     } catch (error) {
-  //       console.error('Error fetching drivers:', error);
-  //       setLoading(false);
-  //     }
-  //   };
-    
-  //   fetchDrivers();
-  // }, []);
-
-  // Replace your existing fetchDrivers useEffect with this:
+  // جلب السائقين
   useEffect(() => {
     const fetchDrivers = async () => {
       try {
         const data = await api.getDrivers();
-        // Add random status and route to drivers from backend
-        const driversWithMockData = generateMockDrivers(data);
+        const routes = [
+          "Highway 101 - Northbound", "Downtown Express Route", "Coastal Highway",
+          "Mountain Pass Route", "Industrial District Loop", "Airport Connector",
+          "Suburban Transit Line", "Port Authority Route"
+        ];
+        const statuses = ["active", "inactive"];
+        const driversWithMockData = data.map(driver => ({
+          ...driver,
+          status: statuses[Math.floor(Math.random() * statuses.length)],
+          route: routes[Math.floor(Math.random() * routes.length)],
+          joinDate: "Jan 2025"
+        }));
         setDrivers(driversWithMockData);
         setLoading(false);
       } catch (error) {
@@ -95,51 +52,41 @@ useEffect(() => {
         setLoading(false);
       }
     };
-    
     fetchDrivers();
   }, []);
   
-  //real-time alerts *backend*
-  
-  // Fetch active alerts from backend
+  // جلب الإنذارات
   useEffect(() => {
     const fetchAlerts = async () => {
       try {
         const data = await api.getActiveAlerts();
-        setAlerts(data);
+        console.log('📋 Fetched alerts from API:', data);
+        setAlerts(data || []);
       } catch (error) {
         console.error('Error fetching alerts:', error);
+        setAlerts([]);
       }
     };
+    
     fetchAlerts();
-    // Then fetch every 2 seconds (polling)
-    const interval = setInterval(fetchAlerts, 2000);
+    const interval = setInterval(fetchAlerts, 3000);
     return () => clearInterval(interval);
   }, []);
-  //*************************************/
-   // WebSocket for real-time alerts
-   useEffect(() => {
+
+  // WebSocket للإشعارات الفورية
+  useEffect(() => {
     const ws = api.connectAlertsWebSocket(
-      // When a new alert arrives
       (newAlert) => {
         console.log('New alert received:', newAlert);
         setAlerts(prev => [newAlert, ...prev]);
-        // Auto-call driver (phone rings)
         setCallingDriver(newAlert.driverName);
-        setTimeout(() => {
-          setCallingDriver(null);
-        }, 3000);
+        setTimeout(() => setCallingDriver(null), 3000);
       },
-      (error) => {
-        console.error('WebSocket error:', error);
-      }
+      (error) => console.error('WebSocket error:', error)
     );
     return () => ws.close();
   }, []);
 
-
-
-  // Handle logout
   const handleLogout = async () => {
     await api.logout();
     navigate("/login");
@@ -150,9 +97,10 @@ useEffect(() => {
 
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
-    { id: "drivers",   label: "All Drivers", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
-    { id: "history",   label: "History",   icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg> },
-    { id: "settings",  label: "Settings",  icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
+    { id: "drivers", label: "All Drivers", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> },
+    { id: "history", label: "History", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg> },
+    { id: "settings", label: "Settings", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> },
+    { id: "images", label: "Image Management", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="2" width="20" height="20" rx="2"/><circle cx="12" cy="12" r="4"/></svg> }
   ];
 
   if (loading) {
@@ -163,9 +111,9 @@ useEffect(() => {
       </div>
     );
   }
+
   return (
     <div className="dv-layout">
-      {/* Auto-call Notification Overlay - System automatically calls */}
       {callingDriver && (
         <div className="dv-call-overlay">
           <div className="dv-call-modal">
@@ -181,26 +129,22 @@ useEffect(() => {
         </div>
       )}
 
-      {/* Sidebar */}
       <aside className={`dv-sidebar ${sidebarOpen ? "" : "dv-sidebar--collapsed"}`}>
-      <div className="dv-sidebar__brand">
-      <div className="dv-brand-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="24" cy="24" r="18" stroke="white" strokeWidth="2.5" />
-          
-          {/* Eye shape */}
-          <path d="M17 24 Q24 16.5 31 24 Q24 31.5 17 24Z" fill="white" />
-          <circle cx="24" cy="24" r="3.2" fill="#6366f1" />
-          <circle cx="24" cy="24" r="1.4" fill="white" />
-          
-          <line x1="24" y1="6" x2="24" y2="14" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-          <line x1="24" y1="34" x2="24" y2="42" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-          <line x1="6" y1="24" x2="14" y2="24" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-          <line x1="34" y1="24" x2="42" y2="24" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-        </svg>
-      </div>
-      {sidebarOpen && <span className="dv-brand-name">DriverVigil</span>}
-    </div>
+        <div className="dv-sidebar__brand">
+          <div className="dv-brand-icon">
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="24" cy="24" r="18" stroke="white" strokeWidth="2.5" />
+              <path d="M17 24 Q24 16.5 31 24 Q24 31.5 17 24Z" fill="white" />
+              <circle cx="24" cy="24" r="3.2" fill="#6366f1" />
+              <circle cx="24" cy="24" r="1.4" fill="white" />
+              <line x1="24" y1="6" x2="24" y2="14" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="24" y1="34" x2="24" y2="42" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="6" y1="24" x2="14" y2="24" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+              <line x1="34" y1="24" x2="42" y2="24" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+          </div>
+          {sidebarOpen && <span className="dv-brand-name">DriverVigil</span>}
+        </div>
 
         <nav className="dv-sidebar__nav">
           {navItems.map((item) => (
@@ -225,14 +169,12 @@ useEffect(() => {
         </button>
       </aside>
 
-      {/* Main */}
       <div className="dv-main">
-        {/* Topbar */}
         <header className="dv-topbar">
           <div className="dv-topbar__left">
             <button className="dv-menu-btn" onClick={() => setSidebarOpen(!sidebarOpen)}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="3" y1="6"  x2="21" y2="6"/>
+                <line x1="3" y1="6" x2="21" y2="6"/>
                 <line x1="3" y1="12" x2="21" y2="12"/>
                 <line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
@@ -240,7 +182,6 @@ useEffect(() => {
             <h2 className="dv-topbar__title">Driver Fatigue Monitoring System</h2>
           </div>
           <div className="dv-topbar__right">
-            {/* Notifications - Shows 0 when no alerts */}
             <div className="dv-notif-wrap">
               <button className="dv-icon-btn" onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -251,22 +192,14 @@ useEffect(() => {
               </button>
               {notifOpen && (
                 <div className="dv-notif-dropdown">
-                  <p className="dv-notif-dropdown__title">
-                    Active Fatigue Alerts {alertCount > 0 ? `(${alertCount})` : ""}
-                  </p>
+                  <p className="dv-notif-dropdown__title">Active Fatigue Alerts {alertCount > 0 ? `(${alertCount})` : ""}</p>
                   {alertCount === 0 ? (
-                    <div className="dv-no-alerts-mini">
-                      <p>✅ No active alerts</p>
-                      <span>All drivers are alert</span>
-                    </div>
+                    <div className="dv-no-alerts-mini"><p>✅ No active alerts</p><span>All drivers are alert</span></div>
                   ) : (
                     alerts.map((a) => (
                       <div key={a.id} className="dv-notif-item">
                         <span className="dv-notif-item__dot" />
-                        <div>
-                          <p className="dv-notif-item__name">{a.name}</p>
-                          <p className="dv-notif-item__msg">⚠️ Fatigue Detected - Auto-call initiated</p>
-                        </div>
+                        <div><p className="dv-notif-item__name">{a.name}</p><p className="dv-notif-item__msg">⚠️ Fatigue Detected - Auto-call initiated</p></div>
                         <span className="dv-notif-item__time">{a.time}</span>
                       </div>
                     ))
@@ -275,12 +208,8 @@ useEffect(() => {
               )}
             </div>
 
-            {/* Profile */}
             <div className="dv-profile-wrap">
-              <button
-                className={`dv-icon-btn ${profileOpen ? "dv-icon-btn--active" : ""}`}
-                onClick={() => { setProfileOpen(!profileOpen); setNotifOpen(false); }}
-              >
+              <button className={`dv-icon-btn ${profileOpen ? "dv-icon-btn--active" : ""}`} onClick={() => { setProfileOpen(!profileOpen); setNotifOpen(false); }}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="8" r="4"/>
                   <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
@@ -295,65 +224,42 @@ useEffect(() => {
                         <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
                       </svg>
                     </div>
-                    <div>
-                      <p className="dv-profile-name">{ADMIN.name}</p>
-                      <p className="dv-profile-role">{ADMIN.role}</p>
-                      <p className="dv-profile-email">{ADMIN.email}</p>
-                    </div>
+                    <div><p className="dv-profile-name">{ADMIN.name}</p><p className="dv-profile-role">{ADMIN.role}</p><p className="dv-profile-email">{ADMIN.email}</p></div>
                   </div>
                   <div className="dv-profile-divider" />
-                  <button className="dv-profile-item" onClick={() => { setActivePage("settings"); setProfileOpen(false); }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                    Settings
-                  </button>
-                  <button className="dv-profile-item" onClick={() => { setActivePage("profile"); setProfileOpen(false); }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    Edit Profile
-                  </button>
+                  <button className="dv-profile-item" onClick={() => { setActivePage("settings"); setProfileOpen(false); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</button>
+                  <button className="dv-profile-item" onClick={() => { setActivePage("profile"); setProfileOpen(false); }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Edit Profile</button>
                   <div className="dv-profile-divider" />
-                  <button className="dv-profile-item dv-profile-item--danger" onClick={() => navigate("/")}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                    Sign Out
-                  </button>
+                  <button className="dv-profile-item dv-profile-item--danger" onClick={() => navigate("/")}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign Out</button>
                 </div>
               )}
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
         <div className="dv-content" onClick={() => { setNotifOpen(false); setProfileOpen(false); }}>
           {activePage === "dashboard" && <DashboardPage drivers={drivers} alerts={alerts} />}
-          {activePage === "drivers"   && <AllDriversPage drivers={drivers} />}
-          {activePage === "history"   && <HistoryPage alerts={alerts} resolvedAlerts={[]} />}
-          {activePage === "settings"  && <SettingsPage />}
-          {activePage === "profile"   && <ProfilePage admin={ADMIN} />}
+          {activePage === "drivers" && <AllDriversPage drivers={drivers} />}
+          {activePage === "history" && <HistoryPage alerts={alerts} resolvedAlerts={[]} />}
+          {activePage === "settings" && <SettingsPage />}
+          {activePage === "profile" && <ProfilePage admin={ADMIN} />}
+          {activePage === "images" && <ImageManagementPage />}
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Dashboard Page ── */
+/* ── صفحة Dashboard الرئيسية ── */
 function DashboardPage({ drivers, alerts }) {
   const activeCount = drivers.filter(d => d.status === "active").length;
   const alertCount = alerts.length;
   const [selectedDriver, setSelectedDriver] = useState(null);
 
-  // Get drivers with active alerts
-  const driversWithAlerts = drivers.filter(d => alerts.some(a => a.name === d.name));
-
   return (
     <div className="dv-dashboard">
-      {selectedDriver && (
-        <DriverModal
-          driver={selectedDriver}
-          alerts={alerts.filter(a => a.name === selectedDriver.name)}
-          onClose={() => setSelectedDriver(null)}
-        />
-      )}
-
-      {/* Stat Cards */}
+      {selectedDriver && <DriverModal driver={selectedDriver} alerts={alerts.filter(a => a.name === selectedDriver.name)} onClose={() => setSelectedDriver(null)} />}
+      
       <div className="dv-stats">
         <div className="dv-stat-card">
           <p className="dv-stat-card__label">Active Drivers</p>
@@ -373,23 +279,14 @@ function DashboardPage({ drivers, alerts }) {
           <p className="dv-stat-card__sub">Capturing every 1 second</p>
         </div>
       </div>
-
-      {/* Bottom */}
+      
       <div className="dv-bottom">
         <div className="dv-drivers">
           <h3 className="dv-section-title">Driver Status</h3>
           <div className="dv-driver-grid">
-            {drivers.map((d) => (
-              <DriverCard 
-                key={d.id} 
-                driver={d} 
-                onViewDetails={() => setSelectedDriver(d)} 
-                hasAlert={alerts.some(a => a.name === d.name)}
-              />
-            ))}
+            {drivers.map(d => <DriverCard key={d.id} driver={d} onViewDetails={() => setSelectedDriver(d)} hasAlert={alerts.some(a => a.name === d.name)} />)}
           </div>
         </div>
-
         <div className="dv-alerts-panel">
           <h3 className="dv-section-title">Real-Time Alerts</h3>
           <div className="dv-alerts-list">
@@ -403,7 +300,7 @@ function DashboardPage({ drivers, alerts }) {
                 <span>All drivers are alert and focused</span>
               </div>
             ) : (
-              alerts.map((a) => (
+              alerts.map(a => (
                 <div key={a.id} className="dv-alert-item">
                   <svg className="dv-alert-item__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10"/>
@@ -426,7 +323,7 @@ function DashboardPage({ drivers, alerts }) {
   );
 }
 
-/* ── Driver Card ── */
+/* ── بطاقة السائق ── */
 function DriverCard({ driver, onViewDetails, hasAlert }) {
   return (
     <div className={`dv-driver-card ${hasAlert ? "dv-driver-card--alert" : ""}`}>
@@ -441,9 +338,7 @@ function DriverCard({ driver, onViewDetails, hasAlert }) {
         </div>
       </div>
       <div className="dv-driver-card__body">
-        {hasAlert && (
-          <span className="dv-badge-status dv-badge-status--alert">⚠️ FATIGUE ALERT - AUTO-CALL ACTIVE</span>
-        )}
+        {hasAlert && <span className="dv-badge-status dv-badge-status--alert">⚠️ FATIGUE ALERT - AUTO-CALL ACTIVE</span>}
         <p className="dv-driver-card__route">📍 {driver.route}</p>
         <p className="dv-driver-card__contact">📧 {driver.email}</p>
         <p className="dv-driver-card__contact">📞 {driver.phone}</p>
@@ -453,86 +348,7 @@ function DriverCard({ driver, onViewDetails, hasAlert }) {
   );
 }
 
-/* ── All Drivers Page ── */
-function AllDriversPage({ drivers }) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-
-  const filteredDrivers = drivers.filter(driver => {
-    const matchesSearch = driver.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          driver.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          driver.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || driver.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  return (
-    <div className="dv-all-drivers">
-      <div className="dv-page-header">
-        <h3 className="dv-section-title">All Registered Drivers</h3>
-        <div className="dv-drivers-stats">
-          <span>Total: {drivers.length}</span>
-          <span>Active: {drivers.filter(d => d.status === "active").length}</span>
-        </div>
-      </div>
-
-      <div className="dv-filters-bar">
-        <div className="dv-search-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input 
-            type="text" 
-            placeholder="Search by name, ID, or email..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <select className="dv-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="all">All Status</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </select>
-      </div>
-
-      <div className="dv-drivers-table-container">
-        <table className="dv-drivers-table">
-          <thead>
-            <tr>
-              <th>Driver ID</th>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Phone</th>
-              <th>Route</th>
-              <th>Status</th>
-              <th>Join Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDrivers.map((driver) => (
-              <tr key={driver.id}>
-                <td className="dv-table-id">{driver.id}</td>
-                <td className="dv-table-name">{driver.name}</td>
-                <td>{driver.email}</td>
-                <td>{driver.phone}</td>
-                <td>{driver.route}</td>
-                <td>
-                  <span className={`dv-status-badge ${driver.status === "active" ? "dv-status-active-badge" : "dv-status-inactive-badge"}`}>
-                    {driver.status === "active" ? "Active" : "Inactive"}
-                  </span>
-                </td>
-                <td>{driver.joinDate}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-/* ── Driver Modal ── */
+/* ── نافذة تفاصيل السائق المنبثقة ── */
 function DriverModal({ driver, alerts, onClose }) {
   return (
     <div className="dv-modal-overlay" onClick={onClose}>
@@ -551,9 +367,7 @@ function DriverModal({ driver, alerts, onClose }) {
             </div>
           </div>
           <div className="dv-modal__header-right">
-            {alerts.length > 0 && (
-              <span className="dv-badge-status dv-badge-status--alert">ACTIVE ALERT - AUTO-CALL ACTIVE</span>
-            )}
+            {alerts.length > 0 && <span className="dv-badge-status dv-badge-status--alert">ACTIVE ALERT - AUTO-CALL ACTIVE</span>}
             <button className="dv-modal__close" onClick={onClose}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="18" y1="6" x2="6" y2="18"/>
@@ -562,7 +376,6 @@ function DriverModal({ driver, alerts, onClose }) {
             </button>
           </div>
         </div>
-
         <div className="dv-modal__info">
           <div className="dv-modal__info-item">
             <span className="dv-modal__info-label">Route</span>
@@ -579,17 +392,14 @@ function DriverModal({ driver, alerts, onClose }) {
             <span className="dv-modal__info-val dv-modal__info-val--red">{alerts.length}</span>
           </div>
         </div>
-
         <div className="dv-modal__auto-call-info">
           <p>📞 System automatically calls driver when fatigue is detected</p>
         </div>
-
         <h4 className="dv-modal__section-title">Recent Fatigue Alerts</h4>
-        {alerts.length === 0 ? (
-          <p className="dv-modal__empty">No active fatigue alerts.</p>
-        ) : (
+        {alerts.length === 0 ? 
+          <p className="dv-modal__empty">No active fatigue alerts.</p> : 
           <div className="dv-modal__alerts">
-            {alerts.map((a) => (
+            {alerts.map(a => (
               <div key={a.id} className="dv-modal__alert-row">
                 <span className="dv-modal__alert-time">{a.time}</span>
                 <div className="dv-modal__alert-details">
@@ -599,55 +409,64 @@ function DriverModal({ driver, alerts, onClose }) {
               </div>
             ))}
           </div>
-        )}
+        }
       </div>
     </div>
   );
 }
 
-/* ── History Page ── */
-function HistoryPage({ alerts, resolvedAlerts }) {
-  // Combine active and resolved alerts for history
-  const allHistory = [...alerts, ...resolvedAlerts].sort((a, b) => b.timestamp - a.timestamp);
-
+/* ── صفحة جميع السائقين ── */
+function AllDriversPage({ drivers }) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  
+  const filteredDrivers = drivers.filter(driver => 
+    (driver.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+     driver.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+     driver.email.toLowerCase().includes(searchTerm.toLowerCase())) && 
+    (statusFilter === "all" || driver.status === statusFilter)
+  );
+  
   return (
-    <div className="dv-history">
-      <div className="dv-history__header">
-        <h3 className="dv-section-title" style={{ margin: 0 }}>Alert History</h3>
-        <div className="dv-history__filters">
-          <select className="dv-select">
-            <option>Today</option>
-            <option>Last 7 days</option>
-            <option>Last 30 days</option>
-          </select>
+    <div className="dv-all-drivers">
+      <div className="dv-page-header">
+        <h3 className="dv-section-title">All Registered Drivers</h3>
+        <div className="dv-drivers-stats">
+          <span>Total: {drivers.length}</span>
+          <span>Active: {drivers.filter(d => d.status === "active").length}</span>
         </div>
       </div>
-
-      <div className="dv-history-table-wrap">
-        <table className="dv-table">
+      <div className="dv-filters-bar">
+        <div className="dv-search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input type="text" placeholder="Search by name, ID, or email..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+        </div>
+        <select className="dv-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+      <div className="dv-drivers-table-container">
+        <table className="dv-drivers-table">
           <thead>
-            <tr>
-              <th>Time</th>
-              <th>Driver</th>
-              <th>Alert Type</th>
-              <th>System Action</th>
-            </tr>
+            <tr><th>Driver ID</th><th>Name</th><th>Email</th><th>Phone</th><th>Route</th><th>Status</th><th>Join Date</th></tr>
           </thead>
           <tbody>
-            {allHistory.length === 0 ? (
-              <tr>
-                <td colSpan="4" className="dv-empty-state">No alerts recorded</td>
+            {filteredDrivers.map(driver => (
+              <tr key={driver.id}>
+                <td className="dv-table-id">{driver.id}</td>
+                <td className="dv-table-name">{driver.name}</td>
+                <td>{driver.email}</td>
+                <td>{driver.phone}</td>
+                <td>{driver.route}</td>
+                <td><span className={`dv-status-badge ${driver.status === "active" ? "dv-status-active-badge" : "dv-status-inactive-badge"}`}>{driver.status === "active" ? "Active" : "Inactive"}</span></td>
+                <td>{driver.joinDate}</td>
               </tr>
-            ) : (
-              allHistory.map((alert) => (
-                <tr key={alert.id}>
-                  <td className="dv-table__time">{alert.time}</td>
-                  <td className="dv-table__name">{alert.name}</td>
-                  <td><span className="dv-badge-status dv-badge-status--alert">FATIGUE ALERT</span></td>
-                  <td>📞 Auto-call initiated</td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
       </div>
@@ -655,31 +474,62 @@ function HistoryPage({ alerts, resolvedAlerts }) {
   );
 }
 
-/* ── Settings Page ── */
+/* ── صفحة سجل الإنذارات ── */
+function HistoryPage({ alerts, resolvedAlerts }) {
+  const allHistory = [...alerts, ...resolvedAlerts].sort((a, b) => b.timestamp - a.timestamp);
+  return (
+    <div className="dv-history">
+      <div className="dv-history__header">
+        <h3 className="dv-section-title" style={{ margin: 0 }}>Alert History</h3>
+        <div className="dv-history__filters">
+          <select className="dv-select"><option>Today</option><option>Last 7 days</option><option>Last 30 days</option></select>
+        </div>
+      </div>
+      <div className="dv-history-table-wrap">
+        <table className="dv-table">
+          <thead><tr><th>Time</th><th>Driver</th><th>Alert Type</th><th>System Action</th></tr></thead>
+          <tbody>
+            {allHistory.length === 0 ? 
+              <tr><td colSpan="4" className="dv-empty-state">No alerts recorded</td></tr> : 
+              allHistory.map(alert => (
+                <tr key={alert.id}>
+                  <td className="dv-table__time">{alert.time}</td>
+                  <td className="dv-table__name">{alert.name}</td>
+                  <td><span className="dv-badge-status dv-badge-status--alert">FATIGUE ALERT</span></td>
+                  <td>📞 Auto-call initiated</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ── صفحة الإعدادات ── */
 function SettingsPage() {
   const [fatigue, setFatigue] = useState(3);
   const [autoCall, setAutoCall] = useState(true);
   const [sound, setSound] = useState(true);
   const [saved, setSaved] = useState(false);
-
-  //Update SettingsPage save *backend*
-  const handleSave = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/settings', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fatigue, autoCall, sound })
-      });
-      
-      if (response.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
-      }
-    } catch (error) {
-      console.error('Error saving settings:', error);
-    }
+  
+  const handleSave = async () => { 
+    try { 
+      const response = await fetch('http://localhost:5000/api/settings', { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ fatigue, autoCall, sound }) 
+      }); 
+      if (response.ok) { 
+        setSaved(true); 
+        setTimeout(() => setSaved(false), 2500); 
+      } 
+    } catch (error) { 
+      console.error('Error saving settings:', error); 
+    } 
   };
-
+  
   return (
     <div className="dv-settings">
       <h3 className="dv-section-title">System Settings</h3>
@@ -699,26 +549,18 @@ function SettingsPage() {
             <p>📞 System automatically calls driver on alert</p>
           </div>
         </div>
-
         <div className="dv-settings-card">
           <h4 className="dv-settings-card__title">Emergency Actions</h4>
           <div className="dv-settings-row">
             <label className="dv-settings-label">Auto-call on alert</label>
-            <button type="button" className={`dv-toggle ${autoCall ? "dv-toggle--on" : ""}`} onClick={() => setAutoCall(!autoCall)}>
-              <span className="dv-toggle__knob" />
-            </button>
+            <button type="button" className={`dv-toggle ${autoCall ? "dv-toggle--on" : ""}`} onClick={() => setAutoCall(!autoCall)}><span className="dv-toggle__knob" /></button>
           </div>
           <div className="dv-settings-row">
             <label className="dv-settings-label">Sound alerts</label>
-            <button type="button" className={`dv-toggle ${sound ? "dv-toggle--on" : ""}`} onClick={() => setSound(!sound)}>
-              <span className="dv-toggle__knob" />
-            </button>
+            <button type="button" className={`dv-toggle ${sound ? "dv-toggle--on" : ""}`} onClick={() => setSound(!sound)}><span className="dv-toggle__knob" /></button>
           </div>
-          <div className="dv-settings-info">
-            <p>✅ Auto-call is enabled by default for driver safety</p>
-          </div>
+          <div className="dv-settings-info"><p>✅ Auto-call is enabled by default for driver safety</p></div>
         </div>
-
         <div className="dv-settings-card">
           <h4 className="dv-settings-card__title">System Info</h4>
           <div className="dv-info-row"><span>Version</span><span className="dv-info-val">v3.0.0</span></div>
@@ -728,14 +570,12 @@ function SettingsPage() {
           <div className="dv-info-row"><span>Last updated</span><span className="dv-info-val">2026-04-05</span></div>
         </div>
       </div>
-      <button type="button" className="dv-save-btn" onClick={handleSave}>
-        {saved ? "✓ Saved!" : "Save Settings"}
-      </button>
+      <button type="button" className="dv-save-btn" onClick={handleSave}>{saved ? "✓ Saved!" : "Save Settings"}</button>
     </div>
   );
 }
 
-/* ── Profile Page ── */
+/* ── صفحة الملف الشخصي ── */
 function ProfilePage({ admin }) {
   const [form, setForm] = useState({ name: admin.name, email: admin.email, phone: "+1 555 000 1234" });
   const [currentPw, setCurrentPw] = useState("");
@@ -746,57 +586,49 @@ function ProfilePage({ admin }) {
   const [saved, setSaved] = useState(false);
   const [pwSaved, setPwSaved] = useState(false);
   const [pwError, setPwError] = useState("");
-
-  //update profile saved *backend*
-  const handleSaveProfile = async () => {
-    try {
-      const response = await fetch('http://localhost:5000/api/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
-      
-      if (response.ok) {
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
-      }
-    } catch (error) {
-      console.error('Error updating profile:', error);
-    }
+  
+  const handleSaveProfile = async () => { 
+    try { 
+      const response = await fetch('http://localhost:5000/api/profile', { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(form) 
+      }); 
+      if (response.ok) { 
+        setSaved(true); 
+        setTimeout(() => setSaved(false), 2500); 
+      } 
+    } catch (error) { 
+      console.error('Error updating profile:', error); 
+    } 
   };
-
-
-  //save change password *backend*
-  const handleChangePassword = async () => {
-    if (!currentPw) { setPwError("Current password is required."); return; }
-    if (newPw.length < 6) { setPwError("New password must be at least 6 characters."); return; }
-    if (newPw !== confirmPw) { setPwError("Passwords do not match."); return; }
-    
-    try {
-      const response = await fetch('http://localhost:5000/api/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw })
-      });
-      
-      if (response.ok) {
-        setPwError("");
-        setCurrentPw("");
-        setNewPw("");
-        setConfirmPw("");
-        setPwSaved(true);
-        setTimeout(() => setPwSaved(false), 2500);
-      } else {
-        const error = await response.json();
-        setPwError(error.message);
-      }
-    } catch (error) {
-      setPwError("Error changing password");
-    }
+  
+  const handleChangePassword = async () => { 
+    if (!currentPw) { setPwError("Current password is required."); return; } 
+    if (newPw.length < 6) { setPwError("New password must be at least 6 characters."); return; } 
+    if (newPw !== confirmPw) { setPwError("Passwords do not match."); return; } 
+    try { 
+      const response = await fetch('http://localhost:5000/api/change-password', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }) 
+      }); 
+      if (response.ok) { 
+        setPwError(""); 
+        setCurrentPw(""); 
+        setNewPw(""); 
+        setConfirmPw(""); 
+        setPwSaved(true); 
+        setTimeout(() => setPwSaved(false), 2500); 
+      } else { 
+        const error = await response.json(); 
+        setPwError(error.message); 
+      } 
+    } catch (error) { 
+      setPwError("Error changing password"); 
+    } 
   };
-
-
-
+  
   return (
     <div className="dv-profile-page">
       <h3 className="dv-section-title">My Profile</h3>
@@ -816,7 +648,6 @@ function ProfilePage({ admin }) {
           <div className="dv-info-row"><span>Role</span><span className="dv-info-val dv-info-val--green">{admin.role}</span></div>
           <div className="dv-info-row"><span>Member since</span><span className="dv-info-val">Jan 2025</span></div>
         </div>
-
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           <div className="dv-settings-card">
             <h4 className="dv-settings-card__title">Edit Information</h4>
@@ -841,11 +672,8 @@ function ProfilePage({ admin }) {
                 <input className="dv-pf-input" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
             </div>
-            <button type="button" className="dv-save-btn" style={{ marginTop: "8px" }} onClick={handleSaveProfile}>
-              {saved ? "✓ Saved!" : "Save Changes"}
-            </button>
+            <button type="button" className="dv-save-btn" style={{ marginTop: "8px" }} onClick={handleSaveProfile}>{saved ? "✓ Saved!" : "Save Changes"}</button>
           </div>
-
           <div className="dv-settings-card">
             <h4 className="dv-settings-card__title">Change Password</h4>
             <div className="dv-pf-field">
@@ -860,10 +688,7 @@ function ProfilePage({ admin }) {
               <div className="dv-pf-input-wrap">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <input className="dv-pf-input" type={showNew ? "text" : "password"} placeholder="Min 6 characters" value={newPw} onChange={(e) => { setNewPw(e.target.value); setPwError(""); }} />
-                <button type="button" className="dv-pf-toggle" onClick={() => setShowNew(!showNew)}>
-                  {showNew ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C6 20 1 12 1 12a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>}
-                </button>
+                <button type="button" className="dv-pf-toggle" onClick={() => setShowNew(!showNew)}>{showNew ? "🙈" : "👁️"}</button>
               </div>
             </div>
             <div className="dv-pf-field">
@@ -871,19 +696,187 @@ function ProfilePage({ admin }) {
               <div className="dv-pf-input-wrap">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 <input className="dv-pf-input" type={showConfirm ? "text" : "password"} placeholder="Repeat new password" value={confirmPw} onChange={(e) => { setConfirmPw(e.target.value); setPwError(""); }} />
-                <button type="button" className="dv-pf-toggle" onClick={() => setShowConfirm(!showConfirm)}>
-                  {showConfirm ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C6 20 1 12 1 12a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c6 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                  : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M1 12S5 4 12 4s11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>}
-                </button>
+                <button type="button" className="dv-pf-toggle" onClick={() => setShowConfirm(!showConfirm)}>{showConfirm ? "🙈" : "👁️"}</button>
               </div>
             </div>
             {pwError && <p className="dv-pf-error">{pwError}</p>}
-            <button type="button" className="dv-save-btn" style={{ marginTop: "8px" }} onClick={handleChangePassword}>
-              {pwSaved ? "✓ Password Updated!" : "Update Password"}
-            </button>
+            <button type="button" className="dv-save-btn" style={{ marginTop: "8px" }} onClick={handleChangePassword}>{pwSaved ? "✓ Password Updated!" : "Update Password"}</button>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* ── صفحة إدارة الصور (تم إصلاحها) ── */
+function ImageManagementPage() {
+  const [images, setImages] = useState([]);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [predictionResult, setPredictionResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [filter, setFilter] = useState("all");
+
+  useEffect(() => {
+    fetchImages();
+  }, []);
+
+  const fetchImages = async () => {
+    try {
+      const response = await fetch('http://localhost:8002/api/images');
+      const data = await response.json();
+      setImages(data);
+    } catch (error) {
+      console.error('Error fetching images:', error);
+    }
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('image', file);
+    try {
+      const response = await fetch('http://localhost:8002/api/images/upload', { method: 'POST', body: formData });
+      const result = await response.json();
+      if (response.ok) { await fetchImages(); alert('✅ Image uploaded successfully!'); }
+      else alert('❌ Upload failed: ' + result.error);
+    } catch (error) { console.error('Upload error:', error); alert('❌ Upload failed'); }
+    finally { setUploading(false); }
+  };
+
+  const analyzeImage = async (imageId, imageUrl) => {
+    setLoading(true);
+    setSelectedImage(imageUrl);
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const formData = new FormData();
+      formData.append('image', blob, 'test.jpg');
+      formData.append('driver_id', 'admin');
+      const dlResponse = await fetch('http://localhost:8000/api/predict/', { method: 'POST', body: formData });
+      const result = await dlResponse.json();
+      setPredictionResult(result);
+      await fetch('http://localhost:8002/api/images/predict', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_id: imageId, prediction: result.prediction, confidence: result.confidence, raw_prediction: result.raw_prediction })
+      });
+      await fetchImages();
+    } catch (error) { console.error('Analysis error:', error); }
+    finally { setLoading(false); }
+  };
+
+  const filteredImages = images.filter(img => {
+    if (filter === "all") return true;
+    if (filter === "pending") return !img.prediction;
+    return img.prediction === filter;
+  });
+
+  return (
+    <div className="dv-image-management">
+      <div className="dv-page-header">
+        <h3 className="dv-section-title">📸 Image Management - Model Improvement</h3>
+        <div className="dv-image-stats">
+          <span>Total: {images.length}</span>
+          <span>Fatigue: {images.filter(i => i.prediction === 'fatigue').length}</span>
+          <span>Active: {images.filter(i => i.prediction === 'active').length}</span>
+          <span>Pending: {images.filter(i => !i.prediction).length}</span>
+        </div>
+      </div>
+      <div className="dv-upload-section">
+        <label className="dv-upload-btn">📤 Upload New Image<input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} /></label>
+        {uploading && <span className="dv-loading-text">Uploading...</span>}
+      </div>
+      <div className="dv-filter-bar">
+        <button className={`dv-filter-btn ${filter === 'all' ? 'active' : ''}`} onClick={() => setFilter('all')}>All</button>
+        <button className={`dv-filter-btn ${filter === 'fatigue' ? 'active' : ''}`} onClick={() => setFilter('fatigue')}>⚠️ Fatigue</button>
+        <button className={`dv-filter-btn ${filter === 'active' ? 'active' : ''}`} onClick={() => setFilter('active')}>✅ Active</button>
+        <button className={`dv-filter-btn ${filter === 'pending' ? 'active' : ''}`} onClick={() => setFilter('pending')}>⏳ Pending</button>
+      </div>
+      <div className="dv-images-grid">
+        {filteredImages.map(img => (
+          <div key={img.id} className={`dv-image-card ${img.prediction}`} onClick={() => analyzeImage(img.id, img.url)}>
+            <img src={img.url} alt="Uploaded" />
+            <div className="dv-image-overlay">
+              <span className={`dv-prediction-badge ${img.prediction || 'pending'}`}>
+                {img.prediction === 'fatigue' ? '⚠️ FATIGUE' : img.prediction === 'active' ? '✅ ACTIVE' : '⏳ PENDING'}
+              </span>
+              {img.confidence && <span className="dv-confidence">Conf: {Math.round(img.confidence * 100)}%</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {selectedImage && predictionResult && (
+        <div className="dv-modal-overlay" onClick={() => { setSelectedImage(null); setPredictionResult(null); }}>
+          <div className="dv-analysis-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="dv-analysis-header">
+              <h3>🔍 Model Analysis Result</h3>
+              <button className="dv-close-btn" onClick={() => { setSelectedImage(null); setPredictionResult(null); }}>✕</button>
+            </div>
+            <div className="dv-analysis-content">
+              <img src={selectedImage} alt="Analyzed" />
+              <div className="dv-analysis-details">
+                {/* ✅ الجزء المصلح - استخدام raw_prediction بدلاً من prediction */}
+                <div className={`dv-result-badge ${predictionResult.raw_prediction === 'fatigue' ? 'fatigue' : 'active'}`}>
+                  {predictionResult.raw_prediction === 'fatigue' ? '⚠️ FATIGUE DETECTED' : 
+                   predictionResult.prediction === 'active' ? '✅ ACTIVE' : 
+                   '❓ UNKNOWN'}
+                </div>
+                <div className="dv-confidence-bar">
+                  <div className="dv-confidence-fill" style={{ width: `${(predictionResult.confidence || 0) * 100}%` }} />
+                  <span>Confidence: {Math.round((predictionResult.confidence || 0) * 100)}%</span>
+                </div>
+                <div className="dv-raw-prediction">
+                  <p><strong>Raw Prediction:</strong> {predictionResult.raw_prediction || 'unknown'}</p>
+                  <p><strong>Alert Level:</strong> {predictionResult.alert_level || 'normal'}</p>
+                </div>
+                <div className="dv-actions">
+                  <button className="dv-save-feedback" onClick={() => alert('Feedback saved for retraining')}>📝 Save for Retraining</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      <style>{`
+        .dv-image-management { padding: 20px; }
+        .dv-image-stats { display: flex; gap: 20px; background: var(--bg-card); padding: 10px 20px; border-radius: 10px; }
+        .dv-upload-section { margin: 20px 0; }
+        .dv-upload-btn { display: inline-block; padding: 12px 24px; background: linear-gradient(135deg, var(--accent-from), var(--accent-to)); color: white; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .dv-upload-btn input { display: none; }
+        .dv-filter-bar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .dv-filter-btn { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border); background: transparent; color: var(--text-sec); cursor: pointer; transition: all 0.2s; }
+        .dv-filter-btn.active { background: var(--accent-from); color: white; border-color: var(--accent-from); }
+        .dv-images-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; margin-top: 20px; }
+        .dv-image-card { position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; transition: transform 0.2s; background: var(--bg-card); border: 2px solid transparent; }
+        .dv-image-card:hover { transform: scale(1.02); }
+        .dv-image-card.fatigue { border-color: var(--alert-red); }
+        .dv-image-card.active { border-color: var(--ok-green); }
+        .dv-image-card img { width: 100%; height: 180px; object-fit: cover; }
+        .dv-image-overlay { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,0.8)); padding: 10px; display: flex; justify-content: space-between; }
+        .dv-prediction-badge { padding: 4px 8px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; }
+        .dv-prediction-badge.fatigue { background: var(--alert-red); color: white; }
+        .dv-prediction-badge.active { background: var(--ok-green); color: white; }
+        .dv-prediction-badge.pending { background: #f59e0b; color: white; }
+        .dv-confidence { font-size: 0.7rem; color: white; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 10px; }
+        .dv-analysis-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--bg-card); border-radius: 20px; max-width: 800px; width: 90%; z-index: 1000; border: 1px solid var(--border); }
+        .dv-analysis-header { display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid var(--border); }
+        .dv-close-btn { background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; }
+        .dv-analysis-content { display: flex; gap: 20px; padding: 20px; flex-wrap: wrap; }
+        .dv-analysis-content img { width: 300px; border-radius: 12px; }
+        .dv-analysis-details { flex: 1; }
+        .dv-result-badge { padding: 12px; border-radius: 10px; text-align: center; font-size: 1.2rem; font-weight: bold; margin-bottom: 20px; }
+        .dv-result-badge.fatigue { background: rgba(248,113,113,0.2); color: var(--alert-red); }
+        .dv-result-badge.active { background: rgba(52,211,153,0.2); color: var(--ok-green); }
+        .dv-confidence-bar { background: rgba(255,255,255,0.1); border-radius: 20px; height: 30px; position: relative; margin-bottom: 20px; overflow: hidden; }
+        .dv-confidence-fill { background: linear-gradient(90deg, var(--accent-from), var(--accent-to)); height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.8rem; }
+        .dv-raw-prediction { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+        .dv-actions { display: flex; gap: 10px; }
+        .dv-save-feedback { flex: 1; padding: 12px; background: linear-gradient(135deg, var(--accent-from), var(--accent-to)); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .dv-loading-text { margin-left: 15px; color: var(--text-muted); }
+      `}</style>
     </div>
   );
 }

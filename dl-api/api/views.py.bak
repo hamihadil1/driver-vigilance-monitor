@@ -11,32 +11,47 @@ import io
 import base64
 import urllib.request
 import time
-import pika
+import pika  
 import json
+import threading
 
 from dl_model.predict import model_instance
+from .debouncer import FatigueDebouncer
 
 # ============================================
-# إعدادات عالية التحمل (85% عتبة)
+# إعدادات مكافحة الحساسية
 # ============================================
-CONFIDENCE_THRESHOLD = 80.0        # 85% عتبة عالية
-WARNING_THRESHOLD = 5              # 6 إطارات (~3 ثواني) تحذير
-ALERT_THRESHOLD = 10               # 12 إطاراً (~6 ثواني) إنذار
-ALERT_COOLDOWN = 20                # 25 ثانية بين الإنذارات
+CONFIDENCE_THRESHOLD = 50.0
+REQUIRED_FRAMES = 3
+ALERT_COOLDOWN = 5
 
-RABBITMQ_HOST = 'rabbitmq'
+# إنشاء مثيل من نظام مكافحة الإنذارات
+debouncer = FatigueDebouncer(
+    threshold=CONFIDENCE_THRESHOLD,
+    required_frames=REQUIRED_FRAMES,
+    cooldown=ALERT_COOLDOWN
+)
+
+# ============================================
+# إعدادات RabbitMQ
+# ============================================
+RABBITMQ_HOST = 'rabbitmq'  # اسم الخدمة في docker-compose
 RABBITMQ_QUEUE = 'fatigue_alerts'
 
-consecutive_fatigue_count = 0
-last_alert_time = 0
-
 def send_alert_to_rabbitmq(driver_id, confidence):
+    """
+    إرسال إنذار إلى RabbitMQ للمعالجة غير المتزامنة
+    """
     try:
         connection = pika.BlockingConnection(
             pika.ConnectionParameters(host=RABBITMQ_HOST)
         )
         channel = connection.channel()
+        
+        # إنشاء queue إذا لم تكن موجودة
         channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
+        
+        # تحضير الرسالة
         message = {
             'type': 'fatigue_alert',
             'driver_id': driver_id,
@@ -44,16 +59,23 @@ def send_alert_to_rabbitmq(driver_id, confidence):
             'timestamp': time.time(),
             'status': 'critical'
         }
+        
+        # إرسال الرسالة
         channel.basic_publish(
             exchange='',
             routing_key=RABBITMQ_QUEUE,
             body=json.dumps(message),
-            properties=pika.BasicProperties(delivery_mode=2)
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # جعل الرسالة دائمة
+            )
         )
+        
         connection.close()
+        print(f"📤 [RabbitMQ] Alerte envoyée pour driver {driver_id}")
         return True
+        
     except Exception as e:
-        print(f"RabbitMQ error: {e}")
+        print(f"❌ [RabbitMQ] Erreur: {e}")
         return False
 
 
@@ -64,20 +86,26 @@ class PredictView(APIView):
     parser_classes = [MultiPartParser, FormParser]
 
     def post(self, request):
-        global consecutive_fatigue_count, last_alert_time
+        global debouncer
+        
         try:
+            # ====================== 1. معالجة الصورة ======================
             if 'image' in request.FILES:
                 uploaded_file = request.FILES['image']
                 image_bytes = uploaded_file.read()
                 image = Image.open(io.BytesIO(image_bytes))
+
             elif 'image' in request.data:
                 image_data = request.data['image']
+
                 if isinstance(image_data, str) and image_data.startswith('data:image'):
                     image_data = image_data.split(',')[1]
                     image_bytes = base64.b64decode(image_data)
                     image = Image.open(io.BytesIO(image_bytes))
+
                 elif isinstance(image_data, str) and image_data.startswith(('http://', 'https://')):
                     image = Image.open(urllib.request.urlopen(image_data))
+
                 else:
                     image = Image.open(io.BytesIO(image_data))
             else:
@@ -87,55 +115,36 @@ class PredictView(APIView):
                 )
 
             image = image.convert('RGB')
+
+            # ====================== 2. التوقع ======================
             result, confidence = model_instance.predict(image)
             
-            current_time = time.time()
+            # ====================== 3. تطبيق نظام مكافحة الحساسية ======================
+            should_alert, current_status = debouncer.process(result, confidence)
             
-            # كشف التعب - عتبة 85% (صارمة)
-            is_fatigued = (result == "fatigue" and confidence > CONFIDENCE_THRESHOLD / 100)
-            
-            if is_fatigued:
-                consecutive_fatigue_count += 1
-                print(f"📊 Fatigue: {consecutive_fatigue_count}/12 (conf: {confidence:.1f}%)")
-            else:
-                if consecutive_fatigue_count > 0:
-                    print(f"🔄 Reset (was {consecutive_fatigue_count})")
-                consecutive_fatigue_count = 0
-            
-            # مستويات التحذير
-            if consecutive_fatigue_count >= ALERT_THRESHOLD:
-                alert_level = 'critical'
-                current_status = 'fatigue'
-                print(f"🔴 CRITICAL ALERT!")
-            elif consecutive_fatigue_count >= WARNING_THRESHOLD:
-                alert_level = 'warning'
-                current_status = 'fatigue'
-                print(f"🟡 WARNING")
-            else:
-                alert_level = 'normal'
-                current_status = 'active'
-            
-            # إرسال إنذار
-            should_alert = False
-            if consecutive_fatigue_count >= ALERT_THRESHOLD:
-                if current_time - last_alert_time > ALERT_COOLDOWN:
-                    should_alert = True
-                    last_alert_time = current_time
-                    consecutive_fatigue_count = 0
-                    print(f"🚨 ALERT SENT! 🚨")
-                    
-                    driver_id = request.data.get('driver_id', None)
-                    if driver_id:
-                        send_alert_to_rabbitmq(driver_id, confidence)
+            # ====================== 4. إرسال إنذار عبر RabbitMQ إذا لزم الأمر ======================
+            if should_alert:
+                driver_id = request.data.get('driver_id', None)
+                if driver_id:
+                    # إرسال إلى RabbitMQ بدلاً من WebSocket
+                    send_alert_to_rabbitmq(driver_id, confidence)
+                    print(f"🚨 [ALERTE] Fatigue! Driver: {driver_id}, Confiance: {confidence}%")
+                else:
+                    print(f"⚠️ Alerte fatigue mais pas de driver_id fourni")
 
+            # ====================== 5. الرد ======================
             return Response({
                 'prediction': current_status,
-                'confidence': confidence,
+                'confidence': round(confidence, 2),
                 'raw_prediction': result,
-                'raw_confidence': confidence,
+                'raw_confidence': round(confidence, 2),
                 'should_alert': should_alert,
-                'alert_level': alert_level,
-                'consecutive_count': consecutive_fatigue_count
+                'alert_threshold': CONFIDENCE_THRESHOLD,
+                'message': '⚠️ FATIGUE - Alerte envoyée!' 
+                          if should_alert else 
+                          ('Fatigue détecté (en attente confirmation)' 
+                           if current_status == 'fatigue' 
+                           else 'Conducteur ACTIF')
             })
 
         except Exception as e:

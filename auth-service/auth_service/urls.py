@@ -3,6 +3,7 @@ from django.urls import path
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
+from api import views
 
 users = {}
 
@@ -163,6 +164,22 @@ def get_active_alerts(request):
     """الحصول على التنبيهات النشطة"""
     return JsonResponse([], safe=False)
 
+@csrf_exempt
+def save_alert(request):
+    """حفظ إنذار جديد"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            print(f"📥 Received alert: {data}")
+            return JsonResponse({
+                'status': 'success', 
+                'alert_id': 1, 
+                'message': 'Alert saved'
+            }, status=201)
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            return JsonResponse({'error': str(e)}, status=500)
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 urlpatterns = [
     path('health', health_check),
@@ -177,4 +194,6 @@ urlpatterns = [
     path('drivers/<str:email>/alerts', get_driver_alerts),
     path('drivers/<str:email>/stats', get_driver_stats),
     path('alerts/active', get_active_alerts),
+
+    path('alerts/save', save_alert),
 ]

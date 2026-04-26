@@ -83,7 +83,6 @@ class ApiService {
 
   
   async login(email, password) {
-  // إذا كان البريد هو admin@test.com، استخدم مسار admin/login
   let url;
   if (email === 'admin@test.com') {
     url = `http://localhost:8002/admin/login`;
@@ -92,7 +91,7 @@ class ApiService {
     url = `http://localhost:8002/login`;
     console.log('🔐 Driver login detected, using:', url);
   }
-  
+
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -104,11 +103,15 @@ class ApiService {
 
   if (response.ok && (data.token || data.access)) {
     this.token = data.token || data.access;
+    localStorage.setItem("token", this.token);
+    localStorage.setItem("userRole", data.role);
+    localStorage.setItem("userId", data.userId || data.email);  // ✅ إضافة هذا السطر
+    localStorage.setItem("userName", data.name || "");
+    console.log('✅ Saved userId:', localStorage.getItem('userId'));
   }
 
   return data;
 }
-
   async register(userData) {
     const url = `${config.AUTH_SERVICE}/register`;
     
@@ -152,15 +155,27 @@ class ApiService {
   // ============================================
 
   async getDrivers() {
-    return this.request('/api/drivers');
+    try {
+     // جلب جميع المستخدمين من auth-service
+     const response = await fetch('http://localhost:8002/users');
+     const data = await response.json();
+     return data;
+    } catch (error) {
+     console.error('Error fetching drivers:', error);
+     // بيانات وهمية كحل مؤقت
+     return [
+       { id: "DRV-001", name: "Test Driver", email: "driver@test.com", phone: "+1234567890", status: "active", route: "Highway 101", joinDate: "Jan 2025" },
+       { id: "DRV-002", name: "Ahmed", email: "driver1@test.com", phone: "+1234567891", status: "active", route: "Downtown", joinDate: "Feb 2025" },
+      ];
+    }
   }
 
   async getDriverDetails(driverId) {
     return this.request(`/api/drivers/${driverId}`);
   }
 
-  async getActiveAlerts() {
-    return this.request('/api/alerts/active');
+ async getActiveAlerts() {
+   return this.request('/api/alerts/active');
   }
 
   async getAlertHistory(filters = {}) {

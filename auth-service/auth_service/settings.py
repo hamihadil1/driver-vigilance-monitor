@@ -26,8 +26,7 @@ SECRET_KEY = 'django-insecure-cb*2xi@dav0wrro*z)=i0cuy4^mo1nf#7a*!sxk#d^1y_j+a2m
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'auth-service', 'nginx']
-
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'auth-service', 'nginx', 'auth.localhost', 'api.localhost', 'dlapi.localhost', '*']
 
 # Application definition
 
@@ -93,11 +92,14 @@ WSGI_APPLICATION = 'auth_service.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.environ.get('SQLITE_PATH', BASE_DIR / 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'driver_vigilance',
+        'USER': 'driver_user',
+        'PASSWORD': 'driver_pass',
+        'HOST': 'postgres',
+        'PORT': '5432',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -156,3 +158,24 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+# إعدادات RabbitMQ
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+RABBITMQ_QUEUE = 'fatigue_alerts'
+
+# إعدادات Consul
+CONSUL_HOST = os.getenv('CONSUL_HOST', 'consul')
+CONSUL_PORT = 8500
+
+# إعدادات JWT
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=30),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+}
+
+# حجم الملفات المرفوعة
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 10240

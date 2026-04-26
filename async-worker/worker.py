@@ -4,106 +4,99 @@ import time
 import requests
 import logging
 from datetime import datetime
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from collections import defaultdict
 
 # ====================== CONFIGURATION ======================
-RABBITMQ_HOST = 'rabbitmq'          # Nom du service dans Docker Compose
-QUEUE_NAME = 'task_queue'
-DL_API_URL = 'http://dl-api:8000'   # URL du micro-service Deep Learning
+RABBITMQ_HOST = 'rabbitmq'
+TASK_QUEUE = 'task_queue'
+ALERT_QUEUE = 'fatigue_alerts'
+API_GATEWAY_URL = 'http://api-gateway:8001'
 
-# Configuration du logging (en français)
+# منع الإنذارات المتكررة
+ALERT_COOLDOWN = 30
+last_alert_time = defaultdict(float)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 
-def process_image(image_data):
-    """Envoie l'image au micro-service Deep Learning et récupère la prédiction"""
+def save_alert_to_database(driver_id, confidence):
     try:
         response = requests.post(
-            f'{DL_API_URL}/api/predict/',
-            files={'image': image_data},      # Envoi en tant que fichier
+            f'{API_GATEWAY_URL}/api/alerts',
+            json={
+                'driver_id': driver_id,
+                'alert_type': 'fatigue',
+                'confidence': confidence,
+                'status': 'active',
+                'timestamp': datetime.now().isoformat()
+            },
+            timeout=5
+        )
+        return response.status_code == 200
+    except Exception as e:
+        logging.error(f"Error saving alert: {e}")
+        return False
+
+def process_fatigue_alert(message):
+    driver_id = message.get('driver_id')
+    confidence = message.get('confidence', 0)
+    
+    if not driver_id:
+        logging.warning("Message reçu sans driver_id")
+        return
+    
+    current_time = time.time()
+    if current_time - last_alert_time[driver_id] < ALERT_COOLDOWN:
+        logging.info(f"⏭️ Alerte ignorée pour {driver_id} (cooldown)")
+        return
+    
+    last_alert_time[driver_id] = current_time
+    logging.info(f"🚨 ALERTE FATIGUE - Driver: {driver_id}, Confiance: {confidence}%")
+    
+    if save_alert_to_database(driver_id, confidence):
+        logging.info(f"✅ Alerte sauvegardée pour {driver_id}")
+
+def process_image(image_data):
+    try:
+        response = requests.post(
+            'http://dl-api:8000/api/predict/',
+            files={'image': image_data},
             timeout=30
         )
         response.raise_for_status()
         return response.json()
     except Exception as e:
-        logging.error(f"Erreur lors de l'appel à l'API DL : {e}")
+        logging.error(f"Erreur appel API DL: {e}")
         return {'error': str(e), 'prediction': 'error'}
 
-
-def send_alert_email(conducteur_email: str, confidence: float):
-    """Envoie un email d'alerte lorsque le conducteur est détecté fatigué"""
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = 'alert@drivervigilance.com'
-        msg['To'] = conducteur_email
-        msg['Subject'] = '⚠️ ALERTE - Conducteur FATIGUE ⚠️'
-
-        body = f"""
-⚠️ ALERTE IMMÉDIATE - Conducteur détecté FATIGUE ⚠️
-
-Confiance : {confidence:.2f}%
-Heure     : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-Veuillez vous arrêter immédiatement et prendre du repos !
-
-Ce message est généré automatiquement par le système Driver Vigilance Monitoring.
-        """
-
-        msg.attach(MIMEText(body, 'plain'))
-
-        # === À décommenter et configurer quand tu auras un vrai serveur SMTP ===
-        # server = smtplib.SMTP('smtp.gmail.com', 587)
-        # server.starttls()
-        # server.login('ton_email@gmail.com', 'ton_app_password')
-        # server.send_message(msg)
-        # server.quit()
-
-        logging.info(f"✅ Email d'alerte envoyé à {conducteur_email}")
-
-    except Exception as e:
-        logging.error(f"Échec de l'envoi de l'email : {e}")
-
-
 def callback(ch, method, properties, body):
-    """Fonction appelée à chaque fois qu'une image arrive dans la queue"""
     try:
         message = json.loads(body)
-        image_data = message.get('image')               # Doit être en bytes
-        conducteur_email = message.get('email')         # Email du conducteur (optionnel mais recommandé)
-
-        if not image_data:
-            logging.error("Message reçu sans image !")
+        
+        if message.get('type') == 'fatigue_alert':
+            process_fatigue_alert(message)
             ch.basic_ack(delivery_tag=method.delivery_tag)
             return
-
-        logging.info("📸 Début du traitement de l'image...")
-
+        
+        image_data = message.get('image')
+        if not image_data:
+            logging.error("Message reçu sans image!")
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+            return
+        
+        logging.info("📸 Traitement de l'image...")
         result = process_image(image_data)
-
-        logging.info(f"✅ Résultat du modèle : {result}")
-
-        # Si le conducteur est fatigué → envoi d'alerte
-        if result.get('prediction') == 'fatigue':
-            confidence = result.get('confidence', 0)
-            if conducteur_email:
-                send_alert_email(conducteur_email, confidence)
-            else:
-                logging.warning("⚠️ Aucune adresse email fournie pour l'alerte")
-
-        # Accuser réception du message (important pour ne pas perdre la tâche)
+        logging.info(f"✅ Résultat: {result}")
+        
         ch.basic_ack(delivery_tag=method.delivery_tag)
-
+        
     except Exception as e:
-        logging.error(f"Erreur pendant le traitement du message : {e}")
-        # Remettre le message dans la queue en cas d'erreur
+        logging.error(f"Erreur: {e}")
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
-
 def main():
-    """Connexion à RabbitMQ avec système de retry"""
     while True:
         try:
             connection = pika.BlockingConnection(
@@ -114,26 +107,19 @@ def main():
                 )
             )
             channel = connection.channel()
-
-            # Création de la queue durable
-            channel.queue_declare(queue=QUEUE_NAME, durable=True)
-
-            # Limiter à une seule tâche à la fois par worker
-            channel.basic_qos(prefetch_count=1)
-
-            channel.basic_consume(
-                queue=QUEUE_NAME,
-                on_message_callback=callback,
-                auto_ack=False
-            )
-
-            logging.info("🚀 Worker RabbitMQ démarré et en attente de messages...")
+            
+            channel.queue_declare(queue=TASK_QUEUE, durable=True)
+            channel.queue_declare(queue=ALERT_QUEUE, durable=True)
+            channel.basic_qos(prefetch_count=3)
+            channel.basic_consume(queue=TASK_QUEUE, on_message_callback=callback, auto_ack=False)
+            channel.basic_consume(queue=ALERT_QUEUE, on_message_callback=callback, auto_ack=False)
+            
+            logging.info("🚀 Worker démarré - Queues: task_queue, fatigue_alerts")
             channel.start_consuming()
-
+            
         except Exception as e:
-            logging.error(f"Impossible de se connecter à RabbitMQ : {e}")
+            logging.error(f"Erreur connexion: {e}")
             time.sleep(5)
-
 
 if __name__ == '__main__':
     main()

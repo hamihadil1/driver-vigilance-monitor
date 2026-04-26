@@ -1,19 +1,19 @@
 @import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@400;600;700&family=Inter:wght@400;500&display=swap');
 
 :root {
-  --bg:           #0a0f1f;
-  --bg-card:      #161d2e;
-  --border:       rgba(130, 100, 220, 0.2);
+  --bg: #0a0f1f;
+  --bg-card: #161d2e;
+  --border: rgba(130, 100, 220, 0.2);
   --border-light: rgba(255, 255, 255, 0.06);
   --text-primary: #ffffff;
-  --text-sec:     #a0aec0;
-  --text-muted:   #6b7280;
-  --accent-from:  #6366f1;
-  --accent-to:    #8b5cf6;
-  --red:          #f87171;
-  --red-bg:       rgba(248, 113, 113, 0.1);
-  --green:        #34d399;
-  --header-h:     64px;
+  --text-sec: #a0aec0;
+  --text-muted: #6b7280;
+  --accent-from: #6366f1;
+  --accent-to: #8b5cf6;
+  --red: #f87171;
+  --red-bg: rgba(248, 113, 113, 0.1);
+  --green: #34d399;
+  --header-h: 64px;
 }
 
 *, *::before, *::after {
@@ -49,7 +49,6 @@ body {
   background: rgba(10,15,31,.85);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
 .dd-header__brand {
@@ -250,6 +249,7 @@ body {
   padding: 8px;
   box-shadow: 0 16px 48px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.04) inset;
   animation: dropIn .2s cubic-bezier(.22,1,.36,1);
+  z-index: 100;
 }
 
 @keyframes dropIn {
@@ -491,8 +491,82 @@ body {
   margin-bottom: 18px;
 }
 
-/* Camera Styles */
+/* ============================================
+   كاميرا تتبع الوجه - الحل النهائي للمربع المقطوع
+   ============================================ */
+.dd-camera-container {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  border-radius: 12px;
+  overflow: visible !important;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #000;
+}
+
+.dd-video {
+  width: 100%;
+  border-radius: 12px;
+  border: 2px solid var(--accent-from);
+  display: block;
+  background: #000;
+}
+
+.face-track-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  border-radius: 12px;
+}
+
+/* ============================================
+   مربع التحليل (Analysis Badge) - داخل الفيديو تماماً
+   ============================================ */
+.dd-analysis-badge {
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  z-index: 20;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: bold;
+  font-family: 'Exo 2', sans-serif;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+}
+
+.dd-analysis-badge.fatigue {
+  background-color: rgba(248, 113, 113, 0.95);
+  color: white;
+  border-left: 3px solid #ff0000;
+}
+
+.dd-analysis-badge.normal {
+  background-color: rgba(52, 211, 153, 0.95);
+  color: white;
+  border-left: 3px solid #00ff00;
+}
+
+.dd-analysis-badge.no_face {
+  background-color: rgba(251, 191, 36, 0.95);
+  color: white;
+  border-left: 3px solid #ffaa00;
+}
+
+/* أزرار الكاميرا */
 .dd-start-camera, .dd-stop-camera {
+  width: 100%;
   padding: 12px 24px;
   border-radius: 10px;
   border: none;
@@ -505,12 +579,16 @@ body {
 .dd-start-camera {
   background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
   color: white;
-  width: 100%;
 }
 
-.dd-start-camera:hover {
+.dd-start-camera:hover:not(:disabled) {
   opacity: 0.9;
   transform: translateY(-1px);
+}
+
+.dd-start-camera:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .dd-stop-camera {
@@ -520,51 +598,8 @@ body {
   margin-top: 10px;
 }
 
-.dd-camera-container {
-  text-align: center;
-}
-
-.dd-video {
-  width: 100%;
-  max-width: 500px;
-  border-radius: 12px;
-  border: 2px solid var(--accent-from);
-  margin-bottom: 10px;
-  background: #000;
-}
-
-.dd-analysis {
-  margin-top: 15px;
-  padding: 12px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dd-analysis.fatigue {
-  background: rgba(248, 113, 113, 0.2);
-  border: 1px solid var(--red);
-  color: var(--red);
-}
-
-.dd-analysis.normal {
-  background: rgba(52, 211, 153, 0.2);
-  border: 1px solid var(--green);
-  color: var(--green);
-}
-
-.dd-analysis-icon {
-  font-size: 2rem;
-}
-
-.dd-analysis-text {
-  text-align: left;
-}
-
-.dd-analysis-text strong {
-  display: block;
-  margin-bottom: 5px;
+.dd-stop-camera:hover {
+  background: rgba(248, 113, 113, 0.3);
 }
 
 /* Recent Alerts */
@@ -600,8 +635,6 @@ body {
 }
 
 .dd-recent__dot--pulse {
-  background: var(--red);
-  box-shadow: 0 0 8px rgba(248, 113, 113, 0.8);
   animation: pulse 1.5s ease infinite;
 }
 
@@ -622,7 +655,7 @@ body {
   margin-top: 2px;
 }
 
-/* No Alerts State */
+/* No Alerts */
 .dd-no-alerts {
   text-align: center;
   padding: 30px 20px;
@@ -663,7 +696,7 @@ body {
   flex-shrink: 0;
 }
 
-/* ── History ── */
+/* History */
 .dd-history {
   display: flex;
   flex-direction: column;
@@ -752,73 +785,7 @@ body {
   color: var(--text-muted);
 }
 
-/* ── Fatigue Images ── */
-.dd-fatigue-images {
-  animation: fadeUp 0.35s ease both;
-}
-
-.dd-subtitle {
-  color: var(--text-muted);
-  margin-bottom: 20px;
-}
-
-.dd-images-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.dd-image-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: transform 0.2s;
-}
-
-.dd-image-card:hover {
-  transform: translateY(-4px);
-}
-
-.dd-image-card img {
-  width: 100%;
-  height: 180px;
-  object-fit: cover;
-}
-
-.dd-image-info {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.dd-image-confidence {
-  font-size: 0.8rem;
-  color: var(--red);
-  font-weight: 600;
-}
-
-.dd-image-time {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-}
-
-.dd-no-images {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-muted);
-}
-
-.dd-no-images svg {
-  width: 64px;
-  height: 64px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-/* ── Profile ── */
+/* Profile */
 .dd-profile {
   display: flex;
   flex-direction: column;
@@ -888,112 +855,6 @@ body {
   font-weight: 500;
 }
 
-/* Form fields */
-.dd-form-field {
-  margin-bottom: 14px;
-}
-
-.dd-form-field label {
-  display: block;
-  font-size: .76rem;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-}
-
-.dd-form-input {
-  display: flex;
-  align-items: center;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(130,100,220,.3);
-  border-radius: 10px;
-  transition: border-color .2s, box-shadow .2s;
-}
-
-.dd-form-input:focus-within {
-  border-color: rgba(130,100,220,.7);
-  box-shadow: 0 0 0 3px rgba(99,102,241,.12);
-}
-
-.dd-form-input svg {
-  width: 16px;
-  height: 16px;
-  margin-left: 14px;
-  flex-shrink: 0;
-  stroke: var(--text-muted);
-}
-
-.dd-form-input input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
-  font-size: .9rem;
-  padding: 12px 14px;
-}
-
-.dd-form-input input::placeholder {
-  color: var(--text-muted);
-}
-
-.dd-form-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  transition: color .2s;
-  flex-shrink: 0;
-}
-
-.dd-form-toggle:hover {
-  color: var(--text-sec);
-}
-
-.dd-form-toggle svg {
-  width: 16px;
-  height: 16px;
-}
-
-.dd-form-error {
-  font-size: .78rem;
-  color: var(--red);
-  margin-bottom: 10px;
-  animation: shake .3s ease;
-}
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px); }
-  75% { transform: translateX(5px); }
-}
-
-.dd-save-btn {
-  padding: 12px 28px;
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(90deg, var(--accent-from), var(--accent-to));
-  color: #fff;
-  font-family: 'Exo 2', sans-serif;
-  font-size: .92rem;
-  font-weight: 700;
-  letter-spacing: .04em;
-  cursor: pointer;
-  transition: opacity .2s, transform .15s, box-shadow .2s;
-  box-shadow: 0 6px 20px rgba(99,102,241,.4);
-  margin-top: 4px;
-}
-
-.dd-save-btn:hover {
-  opacity: .9;
-  transform: translateY(-1px);
-  box-shadow: 0 10px 28px rgba(99,102,241,.5);
-}
-
 /* Call Overlay */
 .dd-call-overlay {
   position: fixed;
@@ -1043,6 +904,12 @@ body {
   animation: shake 0.5s ease infinite;
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
 .dd-call-animation {
   display: flex;
   gap: 12px;
@@ -1066,7 +933,7 @@ body {
   30% { transform: translateY(-20px); opacity: 1; }
 }
 
-/* Loading spinner */
+/* Loading */
 .dd-loading {
   display: flex;
   flex-direction: column;
@@ -1105,12 +972,6 @@ body {
   .dd-stats {
     grid-template-columns: repeat(2, 1fr);
   }
-  .dd-bottom {
-    grid-template-columns: 1fr 1fr;
-  }
-  .dd-bottom > :last-child {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (max-width: 768px) {
@@ -1126,9 +987,6 @@ body {
   .dd-stats {
     grid-template-columns: repeat(2, 1fr);
   }
-  .dd-bottom {
-    grid-template-columns: 1fr;
-  }
   .dd-profile__grid {
     grid-template-columns: 1fr;
   }
@@ -1137,4 +995,54 @@ body {
     gap: 14px;
     align-items: flex-start;
   }
+  /* المنطقة الصفراء - تحذير مبكر */
+.dd-analysis-badge.warning {
+  background-color: rgba(251, 191, 36, 0.95);
+  color: #1a1a2e;
+  border-left: 3px solid #f59e0b;
+  animation: pulse-warning 1.5s ease infinite;
+}
+
+/* وميض التحذير */
+@keyframes warning-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+    opacity: 1;
+  }
+  50% { 
+    box-shadow: 0 0 0 8px rgba(251, 191, 36, 0);
+    opacity: 0.7;
+  }
+}
+
+.dd-analysis-badge.fatigue {
+  background-color: rgba(248, 113, 113, 0.95);
+  color: white;
+  border-left: 3px solid #ff0000;
+  animation: alert-pulse 0.8s ease infinite;
+}
+
+/* وميض الإنذار */
+@keyframes alert-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.7);
+    opacity: 1;
+  }
+  50% { 
+    box-shadow: 0 0 0 12px rgba(248, 113, 113, 0);
+    opacity: 0.5;
+  }
+}
+
+/* اللون الأخضر الطبيعي */
+.dd-analysis-badge.active {
+  background-color: rgba(52, 211, 153, 0.95);
+  color: white;
+  border-left: 3px solid #00ff00;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(251, 191, 36, 0); }
+}
 }

@@ -25,8 +25,7 @@ SECRET_KEY = 'django-insecure-om#-t4_*-4%e4-(rxi0iy03l^$0x64^dph1#7jim8j#t=*3y=%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
-
+ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1', 'dl-api', 'auth.localhost', 'api.localhost', 'dlapi.localhost']
 
 # Application definition
 
@@ -40,9 +39,11 @@ INSTALLED_APPS = [
     'rest_framework',
     'api',
     'dl_model',
+    'corsheaders',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -136,3 +137,32 @@ CHANNEL_LAYERS = {
         'CONFIG': {'hosts': [('redis', 6379)]},
     }
 }
+
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]

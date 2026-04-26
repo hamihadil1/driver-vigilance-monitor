@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: .
+    ports:
+      - "3000:80"
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_DOCKER_MODE=true
+    networks:
+      - microservices-network
+    depends_on:
+      - api-gateway
+      - auth-service
+
+networks:
+  microservices-network:
+    external: true
+    name: driver-vigilance-network

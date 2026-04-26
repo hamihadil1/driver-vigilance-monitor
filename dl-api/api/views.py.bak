@@ -1,0 +1,161 @@
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework import status
+from rest_framework.parsers import MultiPartParser, FormParser
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+from PIL import Image
+import io
+import base64
+import urllib.request
+import time
+import pika  
+import json
+import threading
+
+from dl_model.predict import model_instance
+from .debouncer import FatigueDebouncer
+
+# ============================================
+# إعدادات مكافحة الحساسية
+# ============================================
+CONFIDENCE_THRESHOLD = 50.0
+REQUIRED_FRAMES = 3
+ALERT_COOLDOWN = 5
+
+# إنشاء مثيل من نظام مكافحة الإنذارات
+debouncer = FatigueDebouncer(
+    threshold=CONFIDENCE_THRESHOLD,
+    required_frames=REQUIRED_FRAMES,
+    cooldown=ALERT_COOLDOWN
+)
+
+# ============================================
+# إعدادات RabbitMQ
+# ============================================
+RABBITMQ_HOST = 'rabbitmq'  # اسم الخدمة في docker-compose
+RABBITMQ_QUEUE = 'fatigue_alerts'
+
+def send_alert_to_rabbitmq(driver_id, confidence):
+    """
+    إرسال إنذار إلى RabbitMQ للمعالجة غير المتزامنة
+    """
+    try:
+        connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=RABBITMQ_HOST)
+        )
+        channel = connection.channel()
+        
+        # إنشاء queue إذا لم تكن موجودة
+        channel.queue_declare(queue=RABBITMQ_QUEUE, durable=True)
+        
+        # تحضير الرسالة
+        message = {
+            'type': 'fatigue_alert',
+            'driver_id': driver_id,
+            'confidence': confidence,
+            'timestamp': time.time(),
+            'status': 'critical'
+        }
+        
+        # إرسال الرسالة
+        channel.basic_publish(
+            exchange='',
+            routing_key=RABBITMQ_QUEUE,
+            body=json.dumps(message),
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # جعل الرسالة دائمة
+            )
+        )
+        
+        connection.close()
+        print(f"📤 [RabbitMQ] Alerte envoyée pour driver {driver_id}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ [RabbitMQ] Erreur: {e}")
+        return False
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class PredictView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        global debouncer
+        
+        try:
+            # ====================== 1. معالجة الصورة ======================
+            if 'image' in request.FILES:
+                uploaded_file = request.FILES['image']
+                image_bytes = uploaded_file.read()
+                image = Image.open(io.BytesIO(image_bytes))
+
+            elif 'image' in request.data:
+                image_data = request.data['image']
+
+                if isinstance(image_data, str) and image_data.startswith('data:image'):
+                    image_data = image_data.split(',')[1]
+                    image_bytes = base64.b64decode(image_data)
+                    image = Image.open(io.BytesIO(image_bytes))
+
+                elif isinstance(image_data, str) and image_data.startswith(('http://', 'https://')):
+                    image = Image.open(urllib.request.urlopen(image_data))
+
+                else:
+                    image = Image.open(io.BytesIO(image_data))
+            else:
+                return Response(
+                    {'error': 'Aucune image fournie.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            image = image.convert('RGB')
+
+            # ====================== 2. التوقع ======================
+            result, confidence = model_instance.predict(image)
+            
+            # ====================== 3. تطبيق نظام مكافحة الحساسية ======================
+            should_alert, current_status = debouncer.process(result, confidence)
+            
+            # ====================== 4. إرسال إنذار عبر RabbitMQ إذا لزم الأمر ======================
+            if should_alert:
+                driver_id = request.data.get('driver_id', None)
+                if driver_id:
+                    # إرسال إلى RabbitMQ بدلاً من WebSocket
+                    send_alert_to_rabbitmq(driver_id, confidence)
+                    print(f"🚨 [ALERTE] Fatigue! Driver: {driver_id}, Confiance: {confidence}%")
+                else:
+                    print(f"⚠️ Alerte fatigue mais pas de driver_id fourni")
+
+            # ====================== 5. الرد ======================
+            return Response({
+                'prediction': current_status,
+                'confidence': round(confidence, 2),
+                'raw_prediction': result,
+                'raw_confidence': round(confidence, 2),
+                'should_alert': should_alert,
+                'alert_threshold': CONFIDENCE_THRESHOLD,
+                'message': '⚠️ FATIGUE - Alerte envoyée!' 
+                          if should_alert else 
+                          ('Fatigue détecté (en attente confirmation)' 
+                           if current_status == 'fatigue' 
+                           else 'Conducteur ACTIF')
+            })
+
+        except Exception as e:
+            return Response(
+                {'error': f"Erreur: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class HealthView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'status': 'ok', 'model_loaded': True})

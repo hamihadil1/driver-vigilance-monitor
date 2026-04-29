@@ -3,7 +3,6 @@ from django.urls import path
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
-from api import views
 
 users = {}
 
@@ -47,20 +46,16 @@ def login(request):
             email = data.get('email')
             password = data.get('password')
             
-            from django.contrib.auth import authenticate
             from django.contrib.auth.models import User
             
-            # البحث عن المستخدم في قاعدة البيانات
             try:
                 user = User.objects.get(email=email)
             except User.DoesNotExist:
                 return JsonResponse({'error': 'Invalid credentials'}, status=401)
             
-            # التحقق من كلمة المرور
             if not user.check_password(password):
                 return JsonResponse({'error': 'Invalid credentials'}, status=401)
             
-            # تحديد الدور
             if user.is_superuser or user.is_staff:
                 role = 'admin'
             else:
@@ -106,7 +101,6 @@ def admin_login(request):
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 def get_driver_profile(request, email):
-    """الحصول على ملف تعريف السائق من قاعدة البيانات"""
     from django.contrib.auth.models import User
     try:
         user = User.objects.get(email=email)
@@ -121,64 +115,112 @@ def get_driver_profile(request, email):
         })
     except User.DoesNotExist:
         return JsonResponse({'error': 'Driver not found'}, status=404)
-    
+
 def get_driver_alerts(request, email):
-    """الحصول على تنبيهات السائق"""
-    return JsonResponse([
-        {'id': 1, 'date': 'Today', 'time': '14:30', 'type': 'fatigue'},
-        {'id': 2, 'date': 'Yesterday', 'time': '09:15', 'type': 'fatigue'}
-    ], safe=False)
+    from api.models import Alerte
+    try:
+        alerts = Alerte.objects.filter(driver_id=email).order_by('-timestamp')
+        data = [{
+            'id': a.id,
+            'date': 'Today',
+            'time': a.timestamp.strftime('%H:%M:%S'),
+            'type': a.alert_type,
+            'confidence': a.confidence
+        } for a in alerts[:20]]
+        return JsonResponse(data, safe=False)
+    except:
+        return JsonResponse([], safe=False)
 
 def get_driver_stats(request, email):
-    """الحصول على إحصائيات السائق"""
+    from api.models import Alerte
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    today = timezone.now().date()
+    alerts_today = Alerte.objects.filter(
+        driver_id=email,
+        timestamp__date=today
+    ).count()
+    
+    weekly_alerts = Alerte.objects.filter(
+        driver_id=email,
+        timestamp__date__gte=today - timedelta(days=7)
+    ).count()
+    
     return JsonResponse({
-        'today': 0,
-        'weeklyTotal': 3,
-        'weekly': [
-            {'day': 'Mon', 'alerts': 0},
-            {'day': 'Tue', 'alerts': 1},
-            {'day': 'Wed', 'alerts': 0},
-            {'day': 'Thu', 'alerts': 2},
-            {'day': 'Fri', 'alerts': 0},
-            {'day': 'Sat', 'alerts': 0},
-            {'day': 'Sun', 'alerts': 0}
-        ]
+        'today': alerts_today,
+        'weeklyTotal': weekly_alerts,
+        'weekly': []
     })
 
 def get_all_drivers(request):
-    """الحصول على جميع السائقين"""
+    from django.contrib.auth.models import User
+    from api.models import Conducteur
+    
     drivers_list = []
-    for email, data in users.items():
+    for user in User.objects.filter(is_superuser=False, is_staff=False):
+        conducteur = Conducteur.objects.filter(user=user).first()
         drivers_list.append({
-            'id': email,
-            'name': data.get('fullname', email),
-            'email': email,
-            'phone': data.get('phone', ''),
-            'role': data.get('role', 'driver'),
+            'id': user.id,
+            'name': conducteur.full_name if conducteur else user.username,
+            'email': user.email,
+            'phone': conducteur.phone if conducteur else '',
+            'role': 'driver',
             'status': 'active',
-            'joinDate': 'Apr 2026'
+            'joinDate': user.date_joined.strftime('%b %Y') if user.date_joined else 'Apr 2026'
         })
     return JsonResponse(drivers_list, safe=False)
 
 def get_active_alerts(request):
-    """الحصول على التنبيهات النشطة"""
-    return JsonResponse([], safe=False)
+    from api.models import Alerte
+    alerts = Alerte.objects.filter(is_active=True, is_read=False).order_by('-timestamp')
+    
+    data = []
+    for alert in alerts:
+        name = alert.driver_name
+        if not name and alert.conducteur:
+            name = f"{alert.conducteur.nom} {alert.conducteur.prenom}"
+        
+        data.append({
+            'id': alert.id,
+            'name': name or 'Unknown',
+            'time': alert.timestamp.strftime('%H:%M:%S'),
+            'confidence': alert.confidence,
+            'timestamp': alert.timestamp.isoformat()
+        })
+    
+    return JsonResponse(data, safe=False)
 
 @csrf_exempt
 def save_alert(request):
-    """حفظ إنذار جديد"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
             print(f"📥 Received alert: {data}")
+            
+            from api.models import Alerte
+            alert = Alerte.objects.create(
+                driver_name=data.get('driver_name', 'Unknown'),
+                driver_id=data.get('driver_id'),
+                alert_type=data.get('alert_type', 'fatigue'),
+                confidence=data.get('confidence', 0),
+                is_active=True,
+                is_read=False
+            )
+            
+            print(f"✅ Alert saved in database with ID: {alert.id}")
+            
             return JsonResponse({
-                'status': 'success', 
-                'alert_id': 1, 
-                'message': 'Alert saved'
+                'status': 'success',
+                'alert_id': alert.id,
+                'message': 'Alert saved in database'
             }, status=201)
         except Exception as e:
             print(f"❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
             return JsonResponse({'error': str(e)}, status=500)
+    
     return JsonResponse({'error': 'Method not allowed'}, status=405)
 
 urlpatterns = [
@@ -187,13 +229,10 @@ urlpatterns = [
     path('login', login),
     path('admin/login', admin_login),
     path('admin/', admin.site.urls),
-
-     # مسارات API للسائقين
     path('drivers', get_all_drivers),
     path('drivers/<str:email>/profile', get_driver_profile),
     path('drivers/<str:email>/alerts', get_driver_alerts),
     path('drivers/<str:email>/stats', get_driver_stats),
     path('alerts/active', get_active_alerts),
-
     path('alerts/save', save_alert),
 ]

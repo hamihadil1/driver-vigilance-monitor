@@ -427,10 +427,22 @@ export default function DriverDashboard() {
     }
   };
 
+  // ✅ Fonction de déconnexion
   const handleLogout = async () => {
     stopCamera();
     await api.logout();
     navigate("/login");
+  };
+
+  // ✅ Fonction pour aller à la page de profil
+  const goToProfilePage = () => {
+    setProfileOpen(false);
+    setActivePage("profile");
+  };
+
+  // ✅ Fonction pour retourner au dashboard
+  const goToDashboard = () => {
+    setActivePage("dashboard");
   };
 
   if (loading || !driver) {
@@ -477,11 +489,17 @@ export default function DriverDashboard() {
         </div>
 
         <nav className="dd-nav">
-          <button className={`dd-nav__item ${activePage === "dashboard" ? "dd-nav__item--active" : ""}`} onClick={() => setActivePage("dashboard")}>
+          <button 
+            className={`dd-nav__item ${activePage === "dashboard" ? "dd-nav__item--active" : ""}`} 
+            onClick={goToDashboard}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
             Dashboard
           </button>
-          <button className={`dd-nav__item ${activePage === "history" ? "dd-nav__item--active" : ""}`} onClick={() => setActivePage("history")}>
+          <button 
+            className={`dd-nav__item ${activePage === "history" ? "dd-nav__item--active" : ""}`} 
+            onClick={() => setActivePage("history")}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 15"/></svg>
             History
           </button>
@@ -498,8 +516,15 @@ export default function DriverDashboard() {
             </button>
           </div>
 
+          {/* ✅ القائمة المنسدلة لملف المستخدم */}
           <div className="dd-avatar-wrap">
-            <button className={`dd-avatar-btn ${profileOpen ? "dd-avatar-btn--active" : ""}`} onClick={() => setProfileOpen(!profileOpen)}>
+            <button 
+              className={`dd-avatar-btn ${profileOpen ? "dd-avatar-btn--active" : ""}`} 
+              onClick={(e) => {
+                e.stopPropagation();
+                setProfileOpen(!profileOpen);
+              }}
+            >
               <div className="dd-avatar-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="8" r="4"/>
@@ -511,8 +536,9 @@ export default function DriverDashboard() {
                 <span className="dd-avatar-id">{driver?.id}</span>
               </div>
             </button>
+            
             {profileOpen && (
-              <div className="dd-profile-drop">
+              <div className="dd-profile-drop" onClick={(e) => e.stopPropagation()}>
                 <div className="dd-profile-drop__head">
                   <div className="dd-profile-drop__avatar">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -526,9 +552,9 @@ export default function DriverDashboard() {
                   </div>
                 </div>
                 <div className="dd-profile-drop__divider"/>
-                <button className="dd-profile-drop__item" onClick={() => { setActivePage("profile"); setProfileOpen(false); }}>
+                <button className="dd-profile-drop__item" onClick={goToProfilePage}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  My Profile
+                  Edit Profile
                 </button>
                 <div className="dd-profile-drop__divider"/>
                 <button className="dd-profile-drop__item dd-profile-drop__item--danger" onClick={handleLogout}>
@@ -542,6 +568,7 @@ export default function DriverDashboard() {
       </header>
 
       <main className="dd-main">
+        {/* === PAGE DASHBOARD === */}
         {activePage === "dashboard" && (
           <div className="dd-dashboard">
             <div className="dd-welcome">
@@ -647,6 +674,7 @@ export default function DriverDashboard() {
           </div>
         )}
 
+        {/* === PAGE HISTORY === */}
         {activePage === "history" && (
           <div className="dd-history">
             <div className="dd-history__header">
@@ -673,14 +701,16 @@ export default function DriverDashboard() {
                 </tbody>
               </table>
             </div>
+            <button className="dd-back-btn" onClick={goToDashboard}>← Back to Dashboard</button>
           </div>
         )}
 
+        {/* === PAGE PROFILE (Edit Profile & Change Password) === */}
         {activePage === "profile" && (
           <div className="dd-profile">
             <h2 className="dd-page-title">My Profile</h2>
             <div className="dd-profile__grid">
-              {/* معلومات السائق */}
+              {/* Driver Information Card */}
               <div className="dd-card dd-profile__info">
                 <div className="dd-profile__avatar">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -695,14 +725,40 @@ export default function DriverDashboard() {
                 <div className="dd-info-row"><span>Phone</span><span>{driver.phone}</span></div>
                 <div className="dd-info-row"><span>Email</span><span>{driver.email}</span></div>
                 <div className="dd-profile__divider"/>
-                <button className="dd-profile-drop__item dd-profile-drop__item--danger" onClick={handleLogout} style={{ justifyContent: "center" }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                  Sign Out
-                </button>
+                <button className="dd-back-btn" onClick={goToDashboard}>← Back to Dashboard</button>
               </div>
 
-              {/* تغيير كلمة المرور */}
+              {/* Edit Profile & Change Password Form */}
               <div className="dd-settings-card">
+                <h4 className="dd-settings-card__title">Edit Information</h4>
+                <div className="dv-pf-field">
+                  <label className="dv-pf-label">Full Name</label>
+                  <div className="dv-pf-input-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                    <input 
+                      className="dv-pf-input" 
+                      value={profileForm.name} 
+                      onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} 
+                    />
+                  </div>
+                </div>
+                <div className="dv-pf-field">
+                  <label className="dv-pf-label">Phone Number</label>
+                  <div className="dv-pf-input-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    <input 
+                      className="dv-pf-input" 
+                      value={profileForm.phone} 
+                      onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })} 
+                    />
+                  </div>
+                </div>
+                <button type="button" className="dv-save-btn" onClick={handleSaveProfile}>
+                  {profileSaved ? "✓ Saved!" : "Save Changes"}
+                </button>
+
+                <div className="dd-profile__divider" style={{ margin: "24px 0" }} />
+
                 <h4 className="dd-settings-card__title">🔐 Change Password</h4>
                 
                 <div className="dv-pf-field">
@@ -871,6 +927,22 @@ export default function DriverDashboard() {
           grid-template-columns: 300px 1fr;
           gap: 24px;
           align-items: start;
+        }
+        .dd-back-btn {
+          width: 100%;
+          padding: 10px;
+          margin-top: 16px;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          background: transparent;
+          color: var(--text-sec);
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .dd-back-btn:hover {
+          background: rgba(99, 102, 241, 0.1);
+          color: #818cf8;
+          border-color: rgba(99, 102, 241, 0.3);
         }
         @media (max-width: 768px) {
           .dd-profile__grid {

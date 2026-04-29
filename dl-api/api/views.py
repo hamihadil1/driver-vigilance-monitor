@@ -19,7 +19,7 @@ from dl_model.predict import model_instance
 # ============================================
 # إعدادات عالية التحمل (85% عتبة)
 # ============================================
-CONFIDENCE_THRESHOLD = 80.0        # 85% عتبة عالية
+CONFIDENCE_THRESHOLD = 81.0        # 85% عتبة عالية
 WARNING_THRESHOLD = 5              # 6 إطارات (~3 ثواني) تحذير
 ALERT_THRESHOLD = 10               # 12 إطاراً (~6 ثواني) إنذار
 ALERT_COOLDOWN = 20                # 25 ثانية بين الإنذارات

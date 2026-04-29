@@ -237,3 +237,76 @@ def admin_login(request):
         })
     
     return Response({'error': 'Invalid credentials'}, status=401)
+
+# ====================== Image Management ======================
+from .models import TrainingImage
+import base64
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_images(request):
+    """الحصول على جميع الصور"""
+    try:
+        images = TrainingImage.objects.all().order_by('-uploaded_at')
+        data = []
+        for img in images:
+            data.append({
+                'id': img.id,
+                'filename': img.filename,
+                'url': f"data:image/jpeg;base64,{img.image}" if img.image else '',
+                'prediction': img.prediction,
+                'confidence': img.confidence,
+                'uploaded_at': img.uploaded_at.isoformat()
+            })
+        return Response(data)
+    except Exception as e:
+        return Response([], status=200)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def upload_image(request):
+    """رفع صورة جديدة"""
+    try:
+        file = request.FILES.get('image')
+        if not file:
+            return Response({'error': 'No image provided'}, status=400)
+        
+        image_data = base64.b64encode(file.read()).decode('utf-8')
+        
+        training_image = TrainingImage.objects.create(
+            image=image_data,
+            filename=file.name,
+            prediction='pending',
+            confidence=None
+        )
+        
+        return Response({
+            'status': 'success',
+            'id': training_image.id,
+            'message': 'Image uploaded successfully'
+        }, status=201)
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def save_image_prediction(request):
+    """حفظ نتيجة تحليل الصورة"""
+    try:
+        data = request.data
+        image_id = data.get('image_id')
+        prediction = data.get('prediction')
+        confidence = data.get('confidence')
+        raw_prediction = data.get('raw_prediction')
+        
+        training_image = TrainingImage.objects.get(id=image_id)
+        training_image.prediction = prediction
+        training_image.confidence = confidence
+        training_image.raw_prediction = raw_prediction
+        training_image.save()
+        
+        return Response({'status': 'success'})
+        
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
